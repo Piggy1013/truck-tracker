@@ -40,8 +40,25 @@
   }
   @media (max-width: 760px){
     #app{ grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    #panel{ max-height:46vh; }
+    #panel{ max-height:62vh; transition:max-height .25s ease; }
+    #panel.collapsed{ max-height:none; }
+    #panel.collapsed #panelBody{ display:none; }
+    .collapse-btn{ display:inline-flex !important; }
+    header{ padding:12px 16px 10px; }
+    h1{ font-size:19px; }
+    .sub{ font-size:11.5px; }
+    .search{ padding:12px 16px; }
+    .card{ padding:11px; margin:0 12px 8px; }
+    footer{ padding:10px 16px; }
   }
+
+  .collapse-btn{
+    display:none; margin-left:auto; background:none; border:1px solid var(--line);
+    color:var(--text-dim); width:26px; height:26px; border-radius:6px; cursor:pointer;
+    font-size:13px; align-items:center; justify-content:center; flex:none;
+    transition:transform .2s ease;
+  }
+  #panel.collapsed .collapse-btn{ transform:rotate(-90deg); }
 
   #panel{
     background:var(--panel);
@@ -205,11 +222,12 @@
 <div id="app">
   <div id="panel">
     <header>
-      <div class="eyebrow"><span class="dot" id="statusDot"></span><span id="statusText">連線中</span></div>
+      <div class="eyebrow"><span class="dot" id="statusDot"></span><span id="statusText">連線中</span><button id="collapseBtn" class="collapse-btn">▾</button></div>
       <h1>垃圾車追蹤</h1>
       <div class="sub">台中市政府資料開放平臺 · 清潔車即時衛星定位資料</div>
     </header>
 
+    <div id="panelBody">
     <div class="search">
       <label>車牌號碼 / 路線編號</label>
       <div class="row">
@@ -228,6 +246,7 @@
       <span id="countText">— 筆資料</span>
       <button id="refreshBtn">手動重新整理</button>
     </footer>
+    </div>
   </div>
 
   <div id="mapWrap" style="position:relative;">
@@ -249,7 +268,7 @@ let pollTimer = null;
 function initMap(){
   map = L.map('map', { zoomControl: true, attributionControl: true })
     .setView([24.1477, 120.6736], 12); // 台中市中心
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap &copy; CARTO'
   }).addTo(map);
@@ -578,7 +597,11 @@ function render(){
 
     html += `
       <div class="card${selectedKey===key ? ' active':''}" data-key="${key}" data-idx="${i}">
-        <div class="plate">${escapeHtml(plate)} ${over && over !== '0' && over.toUpperCase() !== 'N' ? '<span class="badge over">超速</span>' : ''}${speed ? `<span class="badge speed">${escapeHtml(speed)} km/h</span>` : ''}<button class="star-btn${isFavorite(plate) ? ' on' : ''}" data-star="${escapeHtml(plate)}" style="float:right;">${isFavorite(plate) ? '★' : '☆'}</button></div>
+        <div class="plate" style="display:flex;align-items:center;gap:6px;">
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(plate)}</span>
+          ${over && over !== '0' && over.toUpperCase() !== 'N' ? '<span class="badge over">超速</span>' : ''}${speed ? `<span class="badge speed">${escapeHtml(speed)} km/h</span>` : ''}
+          <button class="star-btn${isFavorite(plate) ? ' on' : ''}" data-star="${escapeHtml(plate)}">${isFavorite(plate) ? '★' : '☆'}</button>
+        </div>
         <div class="meta">
           路線 <b>${escapeHtml(line || '—')}</b><br>
           位置：${escapeHtml(loc || '—')}<br>
@@ -644,6 +667,11 @@ document.getElementById('plateInput').addEventListener('keydown', (e) => {
   }
 });
 document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+document.getElementById('collapseBtn').addEventListener('click', () => {
+  document.getElementById('panel').classList.toggle('collapsed');
+  setTimeout(() => map.invalidateSize(), 260);
+});
 
 let userMarker = null;
 let userAccuracyCircle = null;
