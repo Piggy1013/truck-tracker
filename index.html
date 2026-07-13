@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>垃圾車追蹤 · 台中</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+
+  :root{
+    --bg: #0b0f0d;
+    --panel: #121815;
+    --panel-2: #171f1b;
+    --line: #253028;
+    --amber: #ffb020;
+    --amber-dim: #6b5322;
+    --green: #5fd68a;
+    --green-dim: #1f3d2c;
+    --text: #e8ede9;
+    --text-dim: #7d8b82;
+    --red: #ff5c5c;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg); color:var(--text);
+    font-family:'Noto Sans TC', sans-serif;
+    overflow:hidden;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  #app{
+    display:grid;
+    grid-template-columns: 360px 1fr;
+    grid-template-rows: 100%;
+    height:100vh;
+    width:100vw;
+  }
+  @media (max-width: 760px){
+    #app{ grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    #panel{ max-height:46vh; }
+  }
+
+  #panel{
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+
+  header{
+    padding:18px 20px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-size:11px; letter-spacing:.18em; color:var(--amber);
+    font-family:'JetBrains Mono', monospace; font-weight:600;
+    display:flex; align-items:center; gap:8px;
+  }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--text-dim); flex:none;
+  }
+  .dot.live{ background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 1.6s infinite; }
+  .dot.err{ background:var(--red); box-shadow:0 0 8px var(--red); }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  h1{
+    margin:6px 0 2px; font-size:22px; font-weight:900; letter-spacing:-0.01em;
+  }
+  .sub{ font-size:12.5px; color:var(--text-dim); line-height:1.5; }
+
+  .search{
+    padding:16px 20px; border-bottom:1px solid var(--line);
+  }
+  .search label{
+    font-size:11px; color:var(--text-dim); letter-spacing:.08em;
+    display:block; margin-bottom:8px; font-family:'JetBrains Mono',monospace;
+  }
+  .search .row{ display:flex; gap:8px; }
+  .search input{
+    flex:1; background:var(--bg); border:1px solid var(--line);
+    color:var(--text); padding:10px 12px; border-radius:6px;
+    font-family:'JetBrains Mono', monospace; font-size:14px; letter-spacing:.03em;
+    outline:none;
+  }
+  .search input:focus{ border-color:var(--amber); }
+  .search button{
+    background:var(--amber); color:#1a1204; border:none;
+    padding:0 16px; border-radius:6px; font-weight:700; font-size:13px;
+    cursor:pointer; font-family:'Noto Sans TC',sans-serif;
+  }
+  .search button:hover{ filter:brightness(1.08); }
+  .hint{ font-size:11px; color:var(--text-dim); margin-top:8px; line-height:1.5; }
+
+  #results{
+    flex:1; overflow-y:auto; padding:8px 0;
+  }
+  .card{
+    margin:0 14px 10px; padding:14px; border:1px solid var(--line);
+    border-radius:8px; background:var(--panel-2); cursor:pointer;
+    transition:border-color .15s;
+  }
+  .card:hover{ border-color:var(--amber-dim); }
+  .card.active{ border-color:var(--amber); background:#1a1712; }
+  .card .plate{
+    font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:700;
+    color:var(--amber); letter-spacing:.03em;
+  }
+  .card .meta{ font-size:12px; color:var(--text-dim); margin-top:6px; line-height:1.6; }
+  .card .meta b{ color:var(--text); font-weight:600; }
+  .badge{
+    display:inline-block; font-family:'JetBrains Mono',monospace; font-size:10px;
+    padding:2px 6px; border-radius:4px; margin-left:6px; letter-spacing:.05em;
+  }
+  .badge.speed{ background:var(--green-dim); color:var(--green); }
+  .badge.over{ background:#3d1f1f; color:var(--red); }
+
+  .empty, .loading, .error{
+    padding:30px 20px; text-align:center; color:var(--text-dim); font-size:13px; line-height:1.7;
+  }
+  .error{ color:var(--red); }
+  .error a{ color:var(--amber); }
+
+  footer{
+    padding:12px 20px; border-top:1px solid var(--line);
+    font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  footer button{
+    background:none; border:1px solid var(--line); color:var(--text-dim);
+    padding:5px 10px; border-radius:5px; cursor:pointer; font-family:inherit; font-size:11px;
+  }
+  footer button:hover{ border-color:var(--amber); color:var(--amber); }
+
+  #map{ width:100%; height:100%; background:#0b0f0d; }
+
+  .leaflet-popup-content-wrapper{
+    background:var(--panel); color:var(--text); border-radius:8px;
+  }
+  .leaflet-popup-tip{ background:var(--panel); }
+  .leaflet-popup-content{ font-family:'Noto Sans TC',sans-serif; font-size:13px; margin:12px 14px; }
+  .leaflet-popup-content .plate{ font-family:'JetBrains Mono',monospace; color:var(--amber); font-weight:700; font-size:15px; }
+
+  .truck-icon{
+    width:14px; height:14px; border-radius:50%;
+    background:var(--amber); border:2px solid #1a1204;
+    box-shadow:0 0 0 3px rgba(255,176,32,.25);
+  }
+  .truck-icon.stale{ background:var(--text-dim); box-shadow:0 0 0 3px rgba(125,139,130,.2); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="panel">
+    <header>
+      <div class="eyebrow"><span class="dot" id="statusDot"></span><span id="statusText">連線中</span></div>
+      <h1>垃圾車追蹤</h1>
+      <div class="sub">台中市政府資料開放平臺 · 清潔車即時衛星定位資料</div>
+    </header>
+
+    <div class="search">
+      <label>車牌號碼 / 路線編號</label>
+      <div class="row">
+        <input type="text" id="plateInput" class="mono" placeholder="例如 ABC-1234 或部分車牌" autocomplete="off">
+        <button id="searchBtn">追蹤</button>
+      </div>
+      <div class="hint">輸入完整或部分車牌即可篩選。清空輸入框可看全部清運中車輛。資料每 10 分鐘由環保局更新一次，非秒級即時，僅供參考。</div>
+    </div>
+
+    <div id="results">
+      <div class="loading">資料讀取中…</div>
+    </div>
+
+    <footer>
+      <span id="countText">— 筆資料</span>
+      <button id="refreshBtn">手動重新整理</button>
+    </footer>
+  </div>
+
+  <div id="map"></div>
+</div>
+
+<script>
+const JSON_URL = "https://newdatacenter.taichung.gov.tw/api/v1/no-auth/resource.download?rid=c923ad20-2ec6-43b9-b3ab-54527e99f7bc";
+const REFRESH_MS = 60 * 1000;
+
+let map, markersLayer;
+let allRecords = [];
+let filterText = "";
+let selectedKey = null;
+let pollTimer = null;
+
+function initMap(){
+  map = L.map('map', { zoomControl: true, attributionControl: true })
+    .setView([24.1477, 120.6736], 12); // 台中市中心
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+}
+
+// 判斷座標格式：若在合理經緯度範圍內就直接當 WGS84 使用，
+// 否則視為 TWD97 TM2 座標並轉換為 WGS84 經緯度
+function twd97ToWGS84(x, y){
+  const a = 6378137.0;
+  const b = 6356752.314245;
+  const long0 = 121 * Math.PI / 180;
+  const k0 = 0.9999;
+  const dx = 250000;
+  const dy = 0;
+
+  const e = Math.sqrt(1 - (b*b)/(a*a));
+  const e2 = e*e / (1 - e*e);
+
+  const xEast = x - dx;
+  const yNorth = y - dy;
+
+  const M = yNorth / k0;
+  const mu = M / (a * (1 - e*e/4 - 3*Math.pow(e,4)/64 - 5*Math.pow(e,6)/256));
+
+  const e1 = (1 - Math.sqrt(1 - e*e)) / (1 + Math.sqrt(1 - e*e));
+
+  const j1 = 3*e1/2 - 27*Math.pow(e1,3)/32;
+  const j2 = 21*Math.pow(e1,2)/16 - 55*Math.pow(e1,4)/32;
+  const j3 = 151*Math.pow(e1,3)/96;
+  const j4 = 1097*Math.pow(e1,4)/512;
+
+  const fp = mu + j1*Math.sin(2*mu) + j2*Math.sin(4*mu) + j3*Math.sin(6*mu) + j4*Math.sin(8*mu);
+
+  const sinFp = Math.sin(fp), cosFp = Math.cos(fp), tanFp = Math.tan(fp);
+
+  const C1 = e2 * cosFp*cosFp;
+  const T1 = tanFp*tanFp;
+  const R1 = a*(1-e*e) / Math.pow(1 - e*e*sinFp*sinFp, 1.5);
+  const N1 = a / Math.sqrt(1 - e*e*sinFp*sinFp);
+  const D = xEast / (N1*k0);
+
+  const Q1 = N1*tanFp/R1;
+  const Q2 = D*D/2;
+  const Q3 = (5 + 3*T1 + 10*C1 - 4*C1*C1 - 9*e2)*Math.pow(D,4)/24;
+  const Q4 = (61 + 90*T1 + 298*C1 + 45*T1*T1 - 3*C1*C1 - 252*e2)*Math.pow(D,6)/720;
+  const lat = fp - Q1*(Q2 - Q3 + Q4);
+
+  const Q5 = D;
+  const Q6 = (1 + 2*T1 + C1)*Math.pow(D,3)/6;
+  const Q7 = (5 - 2*C1 + 28*T1 - 3*C1*C1 + 8*e2 + 24*T1*T1)*Math.pow(D,5)/120;
+  const lon = long0 + (Q5 - Q6 + Q7)/cosFp;
+
+  return { lat: lat*180/Math.PI, lng: lon*180/Math.PI };
+}
+
+function toLatLng(rec){
+  const x = parseFloat(rec.X);
+  const y = parseFloat(rec.Y);
+  if (!isFinite(x) || !isFinite(y)) return null;
+  // 若數值已在經緯度合理範圍，直接使用
+  if (Math.abs(x) <= 182 && Math.abs(y) <= 90 && y > 10 && y < 30 && x > 110 && x < 125) {
+    return { lat: y, lng: x };
+  }
+  // 否則視為 TWD97 TM2 (常見於台灣政府地理資料)
+  try {
+    return twd97ToWGS84(x, y);
+  } catch(e) {
+    return null;
+  }
+}
+
+function isStale(timeStr){
+  if(!timeStr) return true;
+  const t = Date.parse(timeStr.replace(' ', 'T'));
+  if (isNaN(t)) return false;
+  return (Date.now() - t) > 30 * 60 * 1000; // 超過30分鐘視為過期
+}
+
+function formatTimeDisplay(timeStr){
+  if(!timeStr) return '—';
+  const t = Date.parse(timeStr.replace(' ', 'T'));
+  if (isNaN(t)) return timeStr; // 解析失敗就原樣顯示
+
+  const d = new Date(t);
+  const now = new Date();
+  const diffMs = now - t;
+  const diffMin = Math.round(diffMs / 60000);
+
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const sameDay = d.toDateString() === now.toDateString();
+  const dateLabel = sameDay ? '' : `${d.getMonth()+1}/${d.getDate()} `;
+  const clock = `${dateLabel}${hh}:${mm}`;
+
+  let relative;
+  if (diffMin < 0) relative = '剛剛';
+  else if (diffMin < 1) relative = '剛剛';
+  else if (diffMin < 60) relative = `${diffMin} 分鐘前`;
+  else if (diffMin < 24*60) relative = `${Math.round(diffMin/60)} 小時前`;
+  else relative = `${Math.round(diffMin/60/24)} 天前`;
+
+  return `${clock}（${relative}）`;
+}
+
+function setStatus(state, text){
+  const dot = document.getElementById('statusDot');
+  const label = document.getElementById('statusText');
+  dot.className = 'dot' + (state === 'live' ? ' live' : state === 'err' ? ' err' : '');
+  label.textContent = text;
+}
+
+// 直連被 CORS 擋下時依序嘗試的公開代理服務
+const PROXIES = [
+  { name: '直連', build: (url) => url },
+  { name: 'codetabs', build: (url) => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
+  { name: 'allorigins', build: (url) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) },
+  { name: 'isomorphic-git', build: (url) => 'https://cors.isomorphic-git.org/' + url },
+  { name: 'corsproxy.io', build: (url) => 'https://corsproxy.io/?url=' + encodeURIComponent(url) },
+];
+
+function parsePayload(data){
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.data)) return data.data;
+  if (data && Array.isArray(data.result)) return data.result;
+  const arr = Object.values(data || {}).find(v => Array.isArray(v));
+  return arr || [];
+}
+
+async function fetchData(){
+  setStatus('loading', '更新中…');
+  const attemptLog = [];
+
+  for (const proxy of PROXIES){
+    const url = proxy.build(JSON_URL);
+    try{
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+      const text = await res.text();
+      if (!text || !text.trim()) throw new Error('回傳內容是空的');
+
+      let data;
+      try { data = JSON.parse(text); }
+      catch(e){ throw new Error('回傳內容不是有效 JSON (開頭: ' + text.slice(0,60).replace(/\n/g,' ') + ')'); }
+
+      const records = parsePayload(data);
+      if (records.length === 0) throw new Error('解析後資料筆數為 0');
+
+      allRecords = records;
+      attemptLog.push(`✓ ${proxy.name} 成功`);
+      setStatus('live', proxy.name + ' · ' + new Date().toLocaleTimeString('zh-TW', {hour12:false}));
+      render();
+      return;
+    }catch(err){
+      const msg = (err && err.message) || String(err);
+      attemptLog.push(`✗ ${proxy.name}：${msg}`);
+      console.warn('嘗試失敗 (' + proxy.name + '): ' + msg);
+      continue;
+    }
+  }
+
+  setStatus('err', '連線失敗');
+  renderError(attemptLog);
+}
+
+function renderError(attemptLog){
+  const el = document.getElementById('results');
+  const logHtml = (attemptLog || []).map(line => {
+    const ok = line.startsWith('✓');
+    return `<div style="color:${ok ? '#5fd68a' : '#ff5c5c'};margin-top:4px;">${escapeHtml(line)}</div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="error">
+      ⚠ 全部連線方式都失敗了<br><br>
+      <div class="mono" style="font-size:11.5px;text-align:left;background:#0b0f0d;border:1px solid #253028;border-radius:6px;padding:10px;">${logHtml}</div>
+      <br>
+      你可以把上面這段錯誤訊息複製給我，我再換方案。<br><br>
+      同時可以先改用台中環保局官方地圖系統：<br>
+      <a href="https://cleaner.epb.taichung.gov.tw/" target="_blank" rel="noopener">cleaner.epb.taichung.gov.tw</a>
+    </div>`;
+}
+
+function matches(rec){
+  if(!filterText) return true;
+  const plate = (rec.car || rec.CAR || '').toString().toUpperCase().replace(/-/g,'');
+  const line = (rec.lineid || rec.LINEID || '').toString().toUpperCase();
+  const q = filterText.toUpperCase().replace(/-/g,'');
+  return plate.includes(q) || line.includes(q);
+}
+
+function render(){
+  const list = allRecords.filter(matches);
+  const resultsEl = document.getElementById('results');
+  const countEl = document.getElementById('countText');
+  countEl.textContent = list.length + ' 筆資料' + (allRecords.length ? ` (全部 ${allRecords.length} 筆)` : '');
+
+  markersLayer.clearLayers();
+
+  if(list.length === 0){
+    resultsEl.innerHTML = `<div class="empty">找不到符合的車輛。<br>可能該車目前不在執勤路線上，或車牌格式不同，請嘗試輸入部分車牌。</div>`;
+    return;
+  }
+
+  let html = '';
+  const bounds = [];
+
+  list.forEach((rec, i) => {
+    const plate = rec.car || rec.CAR || '未知車號';
+    const time = rec.time || rec.TIME || '';
+    const loc = rec.location || rec.LOCATION || '';
+    const line = rec.lineid || rec.LINEID || '';
+    const speed = rec.SpeedValue || rec.speedvalue || '';
+    const over = (rec.OverSpeed || rec.overspeed || '').toString();
+    const stale = isStale(time);
+    const key = plate + '_' + i;
+
+    const latlng = toLatLng(rec);
+    if (latlng){
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="truck-icon${stale ? ' stale' : ''}"></div>`,
+        iconSize: [14,14]
+      });
+      const marker = L.marker([latlng.lat, latlng.lng], { icon }).addTo(markersLayer);
+      marker.bindPopup(`
+        <div class="plate">${escapeHtml(plate)}</div>
+        <div style="margin-top:6px;color:#7d8b82;">路線 ${escapeHtml(line)}</div>
+        <div style="margin-top:4px;">${escapeHtml(loc)}</div>
+        <div style="margin-top:4px;color:#7d8b82;font-family:'JetBrains Mono',monospace;font-size:11px;">回傳時間 ${escapeHtml(formatTimeDisplay(time))}</div>
+      `);
+      marker.on('click', () => selectCard(key));
+      bounds.push([latlng.lat, latlng.lng]);
+      rec.__latlng = latlng;
+    }
+
+    html += `
+      <div class="card${selectedKey===key ? ' active':''}" data-key="${key}" data-idx="${i}">
+        <div class="plate">${escapeHtml(plate)} ${over && over !== '0' && over.toUpperCase() !== 'N' ? '<span class="badge over">超速</span>' : ''}${speed ? `<span class="badge speed">${escapeHtml(speed)} km/h</span>` : ''}</div>
+        <div class="meta">
+          路線 <b>${escapeHtml(line || '—')}</b><br>
+          位置：${escapeHtml(loc || '—')}<br>
+          回傳時間：${escapeHtml(formatTimeDisplay(time))}${stale ? '　<span style="color:#ff5c5c">(資料較舊)</span>' : ''}
+        </div>
+      </div>`;
+  });
+
+  resultsEl.innerHTML = html;
+
+  document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => {
+      const idx = parseInt(card.dataset.idx, 10);
+      const rec = list[idx];
+      selectCard(card.dataset.key);
+      if(rec && rec.__latlng){
+        map.setView([rec.__latlng.lat, rec.__latlng.lng], 16, { animate: true });
+      }
+    });
+  });
+
+  if (filterText && bounds.length > 0){
+    if(bounds.length === 1){
+      map.setView(bounds[0], 16);
+    } else {
+      map.fitBounds(bounds, { padding: [40,40], maxZoom: 15 });
+    }
+  }
+}
+
+function selectCard(key){
+  selectedKey = key;
+  document.querySelectorAll('.card').forEach(c => {
+    c.classList.toggle('active', c.dataset.key === key);
+  });
+}
+
+function escapeHtml(s){
+  return (s ?? '').toString()
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function startPolling(){
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(fetchData, REFRESH_MS);
+}
+
+document.getElementById('searchBtn').addEventListener('click', () => {
+  filterText = document.getElementById('plateInput').value.trim();
+  render();
+});
+document.getElementById('plateInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){
+    filterText = e.target.value.trim();
+    render();
+  }
+});
+document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+initMap();
+fetchData();
+startPolling();
+</script>
+
+</body>
+</html>
