@@ -448,19 +448,30 @@ function renderError(attemptLog){
 
 let favorites = []; // 儲存的車牌清單
 
+const hasCloudStorage = typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function';
+
 async function loadFavorites(){
   try{
-    const result = await window.storage.get('favorite_plates', false);
-    favorites = result && result.value ? JSON.parse(result.value) : [];
+    if (hasCloudStorage){
+      const result = await window.storage.get('favorite_plates', false);
+      favorites = result && result.value ? JSON.parse(result.value) : [];
+    } else {
+      const raw = localStorage.getItem('favorite_plates');
+      favorites = raw ? JSON.parse(raw) : [];
+    }
   }catch(e){
-    favorites = []; // key 不存在時會丟錯，視為空清單
+    favorites = []; // key 不存在或解析失敗時視為空清單
   }
   renderFavRow();
 }
 
 async function saveFavorites(){
   try{
-    await window.storage.set('favorite_plates', JSON.stringify(favorites), false);
+    if (hasCloudStorage){
+      await window.storage.set('favorite_plates', JSON.stringify(favorites), false);
+    } else {
+      localStorage.setItem('favorite_plates', JSON.stringify(favorites));
+    }
   }catch(e){
     console.warn('我的最愛儲存失敗：', (e && e.message) || e);
   }
@@ -512,6 +523,7 @@ function renderFavRow(){
     });
   });
 }
+function matches(rec){
   if(!filterText) return true;
   const plate = (rec.car || rec.CAR || '').toString().toUpperCase().replace(/-/g,'');
   const line = (rec.lineid || rec.LINEID || '').toString().toUpperCase();
