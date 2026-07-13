@@ -40,7 +40,7 @@
   }
   @media (max-width: 760px){
     #app{ grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    #panel{ max-height:62vh; transition:max-height .25s ease; }
+    #panel{ max-height:34vh; transition:max-height .25s ease; }
     #panel.collapsed{ max-height:none; }
     #panel.collapsed #panelBody{ display:none; }
     .collapse-btn{ display:inline-flex !important; }
@@ -53,12 +53,13 @@
   }
 
   .collapse-btn{
-    display:none; margin-left:auto; background:none; border:1px solid var(--line);
-    color:var(--text-dim); width:26px; height:26px; border-radius:6px; cursor:pointer;
-    font-size:13px; align-items:center; justify-content:center; flex:none;
-    transition:transform .2s ease;
+    display:none; margin-left:auto; background:var(--amber); border:none;
+    color:#1a1204; width:auto; height:32px; padding:0 12px; border-radius:16px; cursor:pointer;
+    font-size:12px; font-weight:700; align-items:center; justify-content:center; gap:5px; flex:none;
+    font-family:'Noto Sans TC', sans-serif;
   }
-  #panel.collapsed .collapse-btn{ transform:rotate(-90deg); }
+  .collapse-btn .arrow{ transition:transform .2s ease; font-size:11px; }
+  #panel.collapsed .collapse-btn .arrow{ transform:rotate(-90deg); }
 
   #panel{
     background:var(--panel);
@@ -222,7 +223,7 @@
 <div id="app">
   <div id="panel">
     <header>
-      <div class="eyebrow"><span class="dot" id="statusDot"></span><span id="statusText">連線中</span><button id="collapseBtn" class="collapse-btn">▾</button></div>
+      <div class="eyebrow"><span class="dot" id="statusDot"></span><span id="statusText">連線中</span><button id="collapseBtn" class="collapse-btn"><span id="collapseLabel">收合清單</span><span class="arrow">▾</span></button></div>
       <h1>垃圾車追蹤</h1>
       <div class="sub">台中市政府資料開放平臺 · 清潔車即時衛星定位資料</div>
     </header>
@@ -669,7 +670,9 @@ document.getElementById('plateInput').addEventListener('keydown', (e) => {
 document.getElementById('refreshBtn').addEventListener('click', fetchData);
 
 document.getElementById('collapseBtn').addEventListener('click', () => {
-  document.getElementById('panel').classList.toggle('collapsed');
+  const panel = document.getElementById('panel');
+  panel.classList.toggle('collapsed');
+  document.getElementById('collapseLabel').textContent = panel.classList.contains('collapsed') ? '展開清單' : '收合清單';
   setTimeout(() => map.invalidateSize(), 260);
 });
 
